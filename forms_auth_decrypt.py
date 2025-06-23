@@ -1,10 +1,11 @@
 import hmac
 import hashlib
 from Crypto.Cipher import AES
-from Crypto.Util.Padding import unpad
+from Crypto.Util.Padding import unpad, pad
 import datetime as dt
 import enum
 from typing import Tuple
+import random
 
 CompatibilityMode =enum.Enum("compatibility_mode", names=["FRAMEWORK45", "Framework20SP2"])
 Encryption =enum.Enum("encryption", names=[("HMACSHA512",64), ("HMACSHA256", 32)])
@@ -105,6 +106,21 @@ class FormAuthDecrypt():
         decrypted_cookie =unpad(cypher.decrypt(self.cookie_body[16:]), 16)
         return decrypted_cookie
     
+
+    def encrypt_cookie(self, serialized_ticket:bytes) -> bytes:
+        
+        # generate initial vector by random bytes
+        initial_vectors =random.randbytes(16)
+        derived_decryption_key = self.derive_key_from_purpose(self.decryption_key, self.decryption_purpose_padded)
+        
+        # using the initial vector and the derived key we can encrypt the cookie
+        cypher = AES.new(bytes(bytearray(derived_decryption_key)), AES.MODE_CBC, initial_vectors)
+        encrypted_cookie =pad(cypher.encrypt(serialized_ticket), 16)
+        cookie_body = initial_vectors + encrypted_cookie
+        self.derived_validation_key = self.derive_key_from_purpose(self.validation_key, self.validation_purpose_padded)
+        hv =hmac.HMAC(bytes(bytearray(self.derived_validation_key)), self.cookie_body, self.algo)
+        return cookie_body + hv.digest()
+    
     def deserialize_ticket(self, decrypted_cookie:bytes) -> dict: 
 
         # microsoft has taken the bits of the data and rammed them all together we need to parse them back out
@@ -123,6 +139,18 @@ class FormAuthDecrypt():
         remaining_cookie =remaining_cookie[str_end:]
         ticket["user_data"], str_end = self.convert_string_data(remaining_cookie)
         return ticket
+    
+    def serialize_ticket(self, ticket:bytes) -> bytes: 
+        
+        return_bytes =""
+        return_bytes += int(ticket["version"]).to_bytes()
+        return_bytes += int(ticket["ticket_version"]).to_bytes()
+        return_bytes += self.convert_date_to_bytes(ticket["issued"])
+        return_bytes += "\x00" + self.convert_date_to_bytes(ticket["expiration"])
+        return_bytes += bool(ticket["persistence"]).to_bytes()
+        return_bytes += self.convert_string_to_bytes(ticket["name"])
+        return_bytes += self.convert_string_to_bytes(ticket['user_data'])
+        return return_bytes
         
     @staticmethod
     def convert_int64_to_date(int_date:int)-> dt.datetime:
@@ -131,6 +159,11 @@ class FormAuthDecrypt():
         utc_datetime = dt.datetime(1,1,1, tzinfo=dt.timezone.utc) +dt.timedelta(seconds=date_sec)
 
         return utc_datetime
+    
+    @staticmethod
+    def convert_date_to_bytes(date:dt.datetime)-> bytes:
+        date_int = int(date.timestamp()*10_000_000)
+        return date_int.to_bytes(byteorder="little", signed=True, length=8)
     
     @staticmethod
     def convert_string_data(remaining_cookie:bytes) -> Tuple[str, int]:
@@ -143,6 +176,12 @@ class FormAuthDecrypt():
         data =(remaining_cookie[str_start:str_end ]).replace(b"\x00",b"")
 
         return data , str_end 
+    
+    @staticmethod
+    def convert_string_to_bytes(data:str) -> bytes:
+        padded_data ="\0".join(data)
+        bytes_to_write =len(data).to_bytes() + padded_data.encode()
+        return bytes_to_write
 
 if __name__ =="__main__":
     fd =FormAuthDecrypt(
