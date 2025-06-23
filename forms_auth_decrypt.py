@@ -24,10 +24,10 @@ class FormAuthDecrypt():
 
         # the purpose needs to have the length in big indian order appended to it after a bytewise 0
         big_indian_decryption_key_length =(len(self.decryption_key)*8).to_bytes(length=4)
-        big_indian_validationn_key_length =(len(self.validation_key)*8).to_bytes(length=4)
+        big_indian_validation_key_length =(len(self.validation_key)*8).to_bytes(length=4)
 
         self.decryption_purpose_padded =  self.purpose +  b'\x00' + big_indian_decryption_key_length
-        self.validation_purpose_padded =   self.purpose +  b'\x00' + big_indian_validationn_key_length
+        self.validation_purpose_padded =   self.purpose +  b'\x00' + big_indian_validation_key_length
     
     @property
     def algo(self):
@@ -59,7 +59,7 @@ class FormAuthDecrypt():
         derived_key=[]
 
         # to dervive a key we take the purpose which could be really short and we hash it as many times as it takes 
-        # with the key but each time we increment the purpose 0001purpose000lenghtOfKey 0002purpose000lenghtOfKey ...
+        # with the key but each time we increment the purpose 0001purpose000lengthOfKey 0002purpose000lengthOfKey ...
 
         for i  in range(1, len(key)):
             byte_counter =i.to_bytes(byteorder="big", signed=False, length=4)
@@ -67,8 +67,8 @@ class FormAuthDecrypt():
             key_purpose_padded_cp = byte_counter + purpose_padded
             h = hmac.new(key, key_purpose_padded_cp, self.algo)
 
-            # as we are appending our derived key we want it to be the same length as the orgional key so we only
-            # append the key if it is less than the orgonale or we append only part of it
+            # as we are appending our derived key we want it to be the same length as the original key so we only
+            # append the key if it is less than the original or we append only part of it
 
             byte_copy_length = min(len(h.digest()),len(key) )
             derived_key += h.digest()[:byte_copy_length]    #this is the Derived key
@@ -87,8 +87,8 @@ class FormAuthDecrypt():
         # last part of the cookie is the signatuer / hash
         self.cookie_hash = encrypted_cookie_bytes[-self.sig_len:]
 
-        # if we take the dervived validation key and hash the cookie body we should get the cookie signature /hash
-        # basically i am sayin hash the first part of the cookie should equal the last part of the cookie
+        # if we take the derived validation key and hash the cookie body we should get the cookie signature /hash
+        # basically i am saying hash the first part of the cookie should equal the last part of the cookie
         hv =hmac.HMAC(bytes(bytearray(self.derived_validation_key)), self.cookie_body, self.algo)
         return(self.cookie_hash == hv.digest())
     
@@ -134,7 +134,7 @@ class FormAuthDecrypt():
     
     @staticmethod
     def convert_string_data(remaining_cookie:bytes) -> Tuple[str, int]:
-        # the first bit is the lenght of the charators in the string
+        # the first bit is the length of the characters in the string
         bytes_to_read = remaining_cookie[0]*2
         # we start reading the sting at index 1 or the second bit
         str_start =1
