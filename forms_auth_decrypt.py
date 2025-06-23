@@ -6,12 +6,12 @@ import datetime as dt
 import enum
 from typing import Tuple
 
-CompatibilityMode =enum.Enum("compatibility_mode", names=["FRAMWORK45", "Framework20SP2"])
+CompatibilityMode =enum.Enum("compatibility_mode", names=["FRAMEWORK45", "Framework20SP2"])
 Encryption =enum.Enum("encryption", names=[("HMACSHA512",64), ("HMACSHA256", 32)])
 
 class FormAuthDecrypt():
     def __init__(self, description_key_hex:str, validation_key_hex:str, key_purpose:str = "FormsAuthentication.Ticket", 
-            compatibility:CompatibilityMode =CompatibilityMode.FRAMWORK45, encryption_type:Encryption = Encryption.HMACSHA512):
+            compatibility:CompatibilityMode =CompatibilityMode.FRAMEWORK45, encryption_type:Encryption = Encryption.HMACSHA512):
         
         self._algo = encryption_type
         self._compatibility = compatibility
@@ -22,7 +22,7 @@ class FormAuthDecrypt():
         self.validation_key = bytes.fromhex(validation_key_hex)
         self.purpose = key_purpose.encode()
 
-        # the purpose needs to have the length in big indian order appended to it after a bytewise 0
+        # the purpose needs to have the length in big indian order appended to it after a bitwise 0
         big_indian_decryption_key_length =(len(self.decryption_key)*8).to_bytes(length=4)
         big_indian_validation_key_length =(len(self.validation_key)*8).to_bytes(length=4)
 
@@ -58,7 +58,7 @@ class FormAuthDecrypt():
     def derive_key_from_purpose(self, key:bytes, purpose_padded:bytes ) -> bytes:
         derived_key=[]
 
-        # to dervive a key we take the purpose which could be really short and we hash it as many times as it takes 
+        # to derive a key we take the purpose which could be really short and we hash it as many times as it takes 
         # with the key but each time we increment the purpose 0001purpose000lengthOfKey 0002purpose000lengthOfKey ...
 
         for i  in range(1, len(key)):
@@ -84,7 +84,7 @@ class FormAuthDecrypt():
         # the signature is appended to the end so the first half of the cookie is the body
         self.cookie_body = encrypted_cookie_bytes[:-self.sig_len]
 
-        # last part of the cookie is the signatuer / hash
+        # last part of the cookie is the signature / hash
         self.cookie_hash = encrypted_cookie_bytes[-self.sig_len:]
 
         # if we take the derived validation key and hash the cookie body we should get the cookie signature /hash
@@ -96,7 +96,7 @@ class FormAuthDecrypt():
         # if the signature matched in the cookie then we can decrypt the cookie
         encrypted_cookie_bytes =bytes.fromhex(encrypted_cookie)
         
-        # the inital vector is the first part of the cookie
+        # the initial vector is the first part of the cookie
         initial_vectors =encrypted_cookie_bytes[:16]
         derived_decryption_key = self.derive_key_from_purpose(self.decryption_key, self.decryption_purpose_padded)
         
@@ -139,7 +139,7 @@ class FormAuthDecrypt():
         # we start reading the sting at index 1 or the second bit
         str_start =1
         str_end = bytes_to_read +str_start
-        # remove all the emptys
+        # remove all the empties
         data =(remaining_cookie[str_start:str_end ]).replace(b"\x00",b"")
 
         return data , str_end 
@@ -148,7 +148,7 @@ if __name__ =="__main__":
     fd =FormAuthDecrypt(
         description_key_hex="",
         validation_key_hex="",
-        encryption_type=Encryption.HMACSHA512, compatibility=CompatibilityMode.FRAMWORK45
+        encryption_type=Encryption.HMACSHA512, compatibility=CompatibilityMode.FRAMEWORK45
     )
     cookie =''
     if (fd.check_signatures(encrypted_cookie=cookie)):
