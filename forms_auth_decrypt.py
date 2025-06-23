@@ -105,7 +105,7 @@ class FormAuthDecrypt():
         decrypted_cookie =unpad(cypher.decrypt(self.cookie_body[16:]), 16)
         return decrypted_cookie
     
-    def deserialize_ticket(self, decrypted_cookie:bytes) -> dict:
+    def deserialize_ticket(self, decrypted_cookie:bytes) -> dict: 
 
         # microsoft has taken the bits of the data and rammed them all together we need to parse them back out
         # the first 0-19 bits are rigidly spoke for after the bits are strings of varying lengths that are defined by the first bit
