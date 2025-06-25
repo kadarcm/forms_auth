@@ -11,7 +11,7 @@ CompatibilityMode =enum.Enum("compatibility_mode", names=["FRAMEWORK45", "Framew
 Encryption =enum.Enum("encryption", names=[("HMACSHA512",64), ("HMACSHA256", 32)])
 
 class FormAuthDecrypt():
-    def __init__(self, description_key_hex:str, validation_key_hex:str, key_purpose:str = "FormsAuthentication.Ticket", 
+    def __init__(self, decryption_key_hex:str, validation_key_hex:str, key_purpose:str = "FormsAuthentication.Ticket", 
             compatibility:CompatibilityMode =CompatibilityMode.FRAMEWORK45, encryption_type:Encryption = Encryption.HMACSHA512):
         
         self._algo = encryption_type
@@ -19,7 +19,7 @@ class FormAuthDecrypt():
 
 
         # We need to operate on byte arrays so convert hex strings to bytes
-        self.decryption_key = bytes.fromhex(description_key_hex)
+        self.decryption_key = bytes.fromhex(decryption_key_hex)
         self.validation_key = bytes.fromhex(validation_key_hex)
         self.purpose = key_purpose.encode()
 
@@ -79,7 +79,7 @@ class FormAuthDecrypt():
                 break
         return  derived_key
         
-    def check_signatures(self, encrypted_cookie:bytes) -> bool:
+    def check_signatures(self, encrypted_cookie:str) -> bool:
         self.derived_validation_key = self.derive_key_from_purpose(self.validation_key, self.validation_purpose_padded)
         # need to work only on bytes
         encrypted_cookie_bytes =bytes.fromhex(encrypted_cookie)
@@ -95,19 +95,22 @@ class FormAuthDecrypt():
         hv =hmac.HMAC(bytes(bytearray(self.derived_validation_key)), self.cookie_body, self.algo)
         return(self.cookie_hash == hv.digest())
     
-    def decrypt_cookie(self, encrypted_cookie:bytes) -> bytes:
+    def decrypt_cookie(self, encrypted_cookie:str) -> bytes:
         # if the signature matched in the cookie then we can decrypt the cookie
         encrypted_cookie_bytes =bytes.fromhex(encrypted_cookie)
         
         # the initial vector is the first part of the cookie
         initial_vectors =encrypted_cookie_bytes[:16]
         derived_decryption_key = self.derive_key_from_purpose(self.decryption_key, self.decryption_purpose_padded)
-        
-        # using the initial vector and the derived key we can decrypt the cookie
-        cypher = AES.new(bytes(bytearray(derived_decryption_key)), AES.MODE_CBC, initial_vectors)
-        decrypted_cookie =unpad(cypher.decrypt(self.cookie_body[16:]), 16)
-        self.ticket.deserialize_ticket(decrypted_cookie=decrypted_cookie)
-        return decrypted_cookie
+
+        if self.check_signatures(encrypted_cookie=encrypted_cookie):
+            # using the initial vector and the derived key we can decrypt the cookie
+            cypher = AES.new(bytes(bytearray(derived_decryption_key)), AES.MODE_CBC, initial_vectors)
+            decrypted_cookie =unpad(cypher.decrypt(self.cookie_body[16:]), 16)
+            self.ticket.deserialize_ticket(decrypted_cookie=decrypted_cookie)
+            return self.ticket
+        else:
+            return None
     
 
     def encrypt_cookie(self, ticket:FormsAuthTicket) -> bytes:
@@ -118,11 +121,11 @@ class FormAuthDecrypt():
         
         # using the initial vector and the derived key we can encrypt the cookie
         cypher = AES.new(bytes(bytearray(derived_decryption_key)), AES.MODE_CBC, initial_vectors)
-        encrypted_cookie =pad(cypher.encrypt(ticket.serialize_ticket()), 16)
+        encrypted_cookie =cypher.encrypt(pad(ticket.serialize_ticket(),16))
         cookie_body = initial_vectors + encrypted_cookie
         self.derived_validation_key = self.derive_key_from_purpose(self.validation_key, self.validation_purpose_padded)
-        hv =hmac.HMAC(bytes(bytearray(self.derived_validation_key)), self.cookie_body, self.algo)
-        return cookie_body + hv.digest()
+        hv =hmac.HMAC(bytes(bytearray(self.derived_validation_key)), cookie_body, self.algo)
+        return (cookie_body + hv.digest()).hex().upper()
     
 
     
@@ -131,16 +134,28 @@ class FormAuthDecrypt():
 
 
 if __name__ =="__main__":
-    decrip_key =random.randbytes()
+    import datetime as dt
+    from forms_auth_ticket import FormsAuthTicket
+    decryption_key_hex = "".join(random.choices(population="123456789ABCDEF", k=48))
+    validation_key_hex = "".join(random.choices(population="123456789ABCDEF", k=128))
 
 
     fd =FormAuthDecrypt(
-        description_key_hex="",
-        validation_key_hex="",
+        decryption_key_hex= decryption_key_hex,
+        validation_key_hex=validation_key_hex,
         encryption_type=Encryption.HMACSHA512, compatibility=CompatibilityMode.FRAMEWORK45
     )
-    cookie =''
-    if (fd.check_signatures(encrypted_cookie=cookie)):
-        decrypted_cookie =fd.decrypt_cookie(encrypted_cookie= cookie)
-        ticket =fd.deserialize_ticket(decrypted_cookie=decrypted_cookie)
-        print(ticket)
+    ticket = FormsAuthTicket(1,1,
+                    dt.datetime.now(), dt.datetime.now()+ dt.timedelta(days=1),
+                    False, "ChrisKadar", "this is my favorite user data")
+    cookie = fd.encrypt_cookie(ticket=ticket)
+    print(cookie)
+
+    new_ticket =fd.decrypt_cookie(cookie)
+    print(repr(new_ticket))
+
+
+    # if (fd.check_signatures(encrypted_cookie=cookie)):
+    #     decrypted_cookie =fd.decrypt_cookie(encrypted_cookie= cookie)
+    #     ticket =fd.deserialize_ticket(decrypted_cookie=decrypted_cookie)
+    #     print(ticket)
