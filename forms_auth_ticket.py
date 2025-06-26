@@ -85,7 +85,7 @@ class FormsAuthTicket():
         # remove all the empties
         data =(remaining_cookie[str_start:str_end ]).replace(b"\x00",b"")
 
-        return data , str_end
+        return str(data) , str_end
     
     @staticmethod
     def convert_string_to_bytes(data:str) -> bytes:
