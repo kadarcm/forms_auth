@@ -7,7 +7,7 @@ class Kadar {
 
     public static void Main(string[] args)
     {
-        LegacyFormsAuthenticationTicketEncryptor encryptor = new LegacyFormsAuthenticationTicketEncryptor(SHA512DecryptionKey, SHA512ValidationKey, ShaVersion.Sha512, CompatibilityMode.Framework45);
+        LegacyFormsAuthenticationTicketEncryptor encryptor = new LegacyFormsAuthenticationTicketEncryptor(SHA512DecryptionKey, SHA512ValidationKey, ShaVersion.Sha512, CompatibilityMode.Framework20SP2);
         string encryptedTicket = "";
         if (args.Length == 0)
         {
